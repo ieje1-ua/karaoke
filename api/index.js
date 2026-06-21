@@ -33,6 +33,8 @@ async function initDb() {
     );
   `);
   try { await db.execute('ALTER TABLE songs ADD COLUMN octave_down INTEGER NOT NULL DEFAULT 0'); } catch {}
+  try { await db.execute('ALTER TABLE songs ADD COLUMN deezer_id INTEGER'); } catch {}
+  try { await db.execute('ALTER TABLE songs ADD COLUMN album_cover TEXT DEFAULT \'\''); } catch {}
   dbReady = true;
 }
 
