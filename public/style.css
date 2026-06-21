@@ -973,6 +973,20 @@ select.input-field {
 .confidence-medium { color: var(--accent); }
 .confidence-low { color: var(--text-muted); }
 
+.rec-type-label {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+.rec-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 1.5rem 0;
+}
+
 /* ===== PROFILE ===== */
 .profile-card {
   background: var(--bg-card);

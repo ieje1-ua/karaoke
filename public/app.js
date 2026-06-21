@@ -324,34 +324,51 @@ async function getRecommendation() {
     var container = document.getElementById('recommendation-result');
     var content = document.getElementById('result-content');
 
-    if (!data.recommendation) {
-      content.innerHTML = '<div class="empty-state" style="padding:1.5rem"><p>' + data.message + '</p></div>';
+    if (!data.recommendations || data.recommendations.length === 0) {
+      content.innerHTML = '<div class="empty-state" style="padding:1.5rem"><p>' + (data.message || 'Sin datos suficientes') + '</p></div>';
       container.style.display = '';
       return;
     }
 
-    var r = data.recommendation;
-    var shiftDisplay = r.semitones === 0 ? '0' : (r.semitones > 0 ? '+' + r.semitones : '' + r.semitones);
-    var confidenceLabel = { high: 'Alta', medium: 'Media', low: 'Baja' }[r.confidence] || r.confidence;
+    var html = '';
+    for (var i = 0; i < data.recommendations.length; i++) {
+      var r = data.recommendations[i];
+      var shiftDisplay = r.semitones === 0 ? '0' : (r.semitones > 0 ? '+' + r.semitones : '' + r.semitones);
+      var confidenceLabel = { high: 'Alta', medium: 'Media', low: 'Baja' }[r.confidence] || r.confidence;
+      var typeLabel = r.type === 'octave-down' ? 'Octava baja' : 'Canto normal';
 
-    content.innerHTML =
-      '<div class="result-main">' +
-        '<div class="result-shift">' + shiftDisplay + '</div>' +
-        '<div>' +
-          '<div class="result-direction">' + (r.direction || r.message || '') + '</div>' +
-          (r.new_key ? '<div class="result-detail">Tonalidad resultante: <b>' + r.new_key + '</b></div>' : '') +
+      if (data.recommendations.length > 1) {
+        html += '<div class="rec-type-label">' + typeLabel + '</div>';
+      }
+
+      html +=
+        '<div class="result-main">' +
+          '<div class="result-shift">' + shiftDisplay + '</div>' +
+          '<div>' +
+            '<div class="result-direction">' + (r.direction || '') + '</div>' +
+            (r.new_key ? '<div class="result-detail">Tonalidad resultante: <b>' + r.new_key + '</b></div>' : '') +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div class="result-grid">' +
-        (r.original_key ? '<div class="result-item"><div class="result-item-label">Tonalidad original</div><div class="result-item-value">' + r.original_key + '</div></div>' : '') +
-        (r.new_key ? '<div class="result-item"><div class="result-item-label">Tu tonalidad</div><div class="result-item-value">' + r.new_key + '</div></div>' : '') +
-        '<div class="result-item"><div class="result-item-label">Canciones analizadas</div><div class="result-item-value">' + r.songCount + '</div></div>' +
-        '<div class="result-item"><div class="result-item-label">Confianza</div><div class="result-item-value confidence-' + r.confidence + '">' + confidenceLabel + '</div></div>' +
-      '</div>' +
-      (r.method === 'average' ? '<div class="result-fit no-fit">Indica la tonalidad original para una recomendacion mas precisa</div>' : '') +
-      (r.confidence === 'medium' ? '<div class="result-fit no-fit">Registra mas canciones con tonalidad para mejorar la precision</div>' : '') +
-      (r.confidence === 'high' && r.method === 'key-pattern' ? '<div class="result-fit fits">Recomendacion basada en tu patron de ' + r.songsAnalyzed + ' canciones</div>' : '');
+        '<div class="result-grid">' +
+          (r.original_key ? '<div class="result-item"><div class="result-item-label">Tonalidad original</div><div class="result-item-value">' + r.original_key + '</div></div>' : '') +
+          (r.new_key ? '<div class="result-item"><div class="result-item-label">Tu tonalidad</div><div class="result-item-value">' + r.new_key + '</div></div>' : '') +
+          '<div class="result-item"><div class="result-item-label">Canciones base</div><div class="result-item-value">' + r.songCount + '</div></div>' +
+          '<div class="result-item"><div class="result-item-label">Confianza</div><div class="result-item-value confidence-' + r.confidence + '">' + confidenceLabel + '</div></div>' +
+        '</div>';
 
+      if (r.method === 'average') {
+        html += '<div class="result-fit no-fit">Indica la tonalidad original para mayor precision</div>';
+      }
+      if (r.confidence === 'medium') {
+        html += '<div class="result-fit no-fit">Registra mas canciones para mejorar la precision</div>';
+      }
+
+      if (i < data.recommendations.length - 1) {
+        html += '<div class="rec-divider"></div>';
+      }
+    }
+
+    content.innerHTML = html;
     container.style.display = '';
   } catch (err) {
     showToast('Error al obtener recomendacion', 'error');

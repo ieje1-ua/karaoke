@@ -236,90 +236,103 @@ app.get('/api/vocal-profile', async (req, res) => {
 // --- Recommendation ---
 
 app.post('/api/recommend', async (req, res) => {
-  await initDb();
-  const { original_key } = req.body;
+  try {
+    await initDb();
+    const { original_key } = req.body;
 
-  const result = await db.execute('SELECT * FROM songs');
-  const songs = result.rows;
+    const result = await db.execute('SELECT * FROM songs');
+    const songs = result.rows;
 
-  if (songs.length === 0) {
-    return res.json({ recommendation: null, message: 'Registra canciones primero para obtener recomendaciones' });
-  }
+    if (songs.length === 0) {
+      return res.json({ recommendations: [], message: 'Registra canciones primero para obtener recomendaciones' });
+    }
 
-  const effShifts = songs.map(s => effectiveShift(s));
-  const avgShift = Math.round(effShifts.reduce((a, b) => a + b, 0) / effShifts.length);
+    const newKeyIdx = original_key ? keyToIndex(original_key) : -1;
+    const isMinor = original_key ? original_key.endsWith('m') : false;
 
-  if (!original_key || keyToIndex(original_key) === -1) {
-    return res.json({
-      recommendation: {
-        semitones: avgShift,
-        confidence: 'low',
-        method: 'average',
-        message: `Sin tonalidad, se usa tu ajuste medio: ${avgShift >= 0 ? '+' : ''}${avgShift} semitonos`,
-        songCount: songs.length
+    const normalSongs = songs.filter(s => !s.octave_down);
+    const octaveDownSongs = songs.filter(s => !!s.octave_down);
+
+    function recommendForGroup(group) {
+      if (group.length === 0) return null;
+
+      const shifts = group.map(s => s.semitone_shift);
+      const avgShift = shifts.reduce((a, b) => a + b, 0) / shifts.length;
+
+      const songsWithKeys = group.filter(s => s.original_key && keyToIndex(s.original_key) !== -1);
+
+      if (newKeyIdx === -1 || songsWithKeys.length === 0) {
+        return {
+          semitones: Math.round(avgShift),
+          confidence: group.length >= 3 ? 'high' : (group.length >= 2 ? 'medium' : 'low'),
+          method: 'average',
+          songCount: group.length,
+          songsAnalyzed: 0
+        };
       }
-    });
-  }
 
-  const songKeyIdx = keyToIndex(original_key);
-  const isMinor = original_key.endsWith('m');
-  const songsWithKeys = songs.filter(s => s.original_key && keyToIndex(s.original_key) !== -1);
+      let totalWeight = 0;
+      let weightedShift = 0;
 
-  if (songsWithKeys.length === 0) {
-    return res.json({
-      recommendation: {
-        semitones: avgShift,
-        confidence: 'low',
-        method: 'average',
-        message: `Sin datos de tonalidad en tus canciones, se usa tu ajuste medio: ${avgShift >= 0 ? '+' : ''}${avgShift} semitonos`,
-        songCount: songs.length
+      for (const song of songsWithKeys) {
+        const songKeyIdx = keyToIndex(song.original_key);
+        let keyDiff = newKeyIdx - songKeyIdx;
+        keyDiff = ((keyDiff + 6) % 12 + 12) % 12 - 6;
+        const expectedShift = song.semitone_shift - keyDiff;
+        const dist = Math.abs(keyDiff);
+        const weight = 1 / (1 + dist);
+        totalWeight += weight;
+        weightedShift += expectedShift * weight;
       }
-    });
+
+      const suggested = Math.round(weightedShift / totalWeight);
+      return {
+        semitones: Math.max(-12, Math.min(12, suggested)),
+        confidence: songsWithKeys.length >= 3 ? 'high' : (songsWithKeys.length >= 2 ? 'medium' : 'low'),
+        method: songsWithKeys.length > 0 ? 'key-pattern' : 'average',
+        songCount: group.length,
+        songsAnalyzed: songsWithKeys.length
+      };
+    }
+
+    function formatRec(rec, type) {
+      if (!rec) return null;
+      const s = rec.semitones;
+      const suffix = type === 'octave-down' ? ' + octava baja' : '';
+      let direction;
+      if (s === 0) direction = 'Sin cambio' + suffix;
+      else if (s > 0) direction = `Subir ${s} semitono${s > 1 ? 's' : ''}` + suffix;
+      else direction = `Bajar ${Math.abs(s)} semitono${Math.abs(s) > 1 ? 's' : ''}` + suffix;
+
+      let new_key = null;
+      if (newKeyIdx !== -1) {
+        const nk = ((newKeyIdx + s) % 12 + 12) % 12;
+        new_key = NOTES[nk] + (isMinor ? 'm' : '');
+      }
+
+      return {
+        type,
+        semitones: s,
+        direction,
+        original_key: original_key || null,
+        new_key,
+        confidence: rec.confidence,
+        method: rec.method,
+        songCount: rec.songCount,
+        songsAnalyzed: rec.songsAnalyzed
+      };
+    }
+
+    const recommendations = [];
+    const normalRec = formatRec(recommendForGroup(normalSongs), 'normal');
+    const octaveDownRec = formatRec(recommendForGroup(octaveDownSongs), 'octave-down');
+    if (normalRec) recommendations.push(normalRec);
+    if (octaveDownRec) recommendations.push(octaveDownRec);
+
+    res.json({ recommendations });
+  } catch (err) {
+    res.status(500).json({ error: 'Error en recomendacion: ' + err.message });
   }
-
-  const effectiveKeys = songsWithKeys.map(s => {
-    const ki = keyToIndex(s.original_key);
-    return ((ki + effectiveShift(s)) % 12 + 12) % 12;
-  });
-
-  let bestShift = 0;
-  let bestScore = Infinity;
-
-  for (let shift = -6; shift <= 6; shift++) {
-    const newKey = ((songKeyIdx + shift) % 12 + 12) % 12;
-
-    let score = 0;
-    for (const ek of effectiveKeys) {
-      score += circularDistance(newKey, ek);
-    }
-    score += Math.abs(shift) * 0.4;
-
-    if (score < bestScore) {
-      bestScore = score;
-      bestShift = shift;
-    }
-  }
-
-  const newKeyIdx = ((songKeyIdx + bestShift) % 12 + 12) % 12;
-  const newKeyName = NOTES[newKeyIdx] + (isMinor ? 'm' : '');
-
-  let direction;
-  if (bestShift === 0) direction = 'Sin cambio';
-  else if (bestShift > 0) direction = `Subir ${bestShift} semitono${bestShift > 1 ? 's' : ''}`;
-  else direction = `Bajar ${Math.abs(bestShift)} semitono${Math.abs(bestShift) > 1 ? 's' : ''}`;
-
-  res.json({
-    recommendation: {
-      semitones: bestShift,
-      direction,
-      original_key: original_key,
-      new_key: newKeyName,
-      confidence: songsWithKeys.length >= 3 ? 'high' : 'medium',
-      method: 'key-pattern',
-      songCount: songs.length,
-      songsAnalyzed: songsWithKeys.length
-    }
-  });
 });
 
 if (process.env.VERCEL !== '1') {
