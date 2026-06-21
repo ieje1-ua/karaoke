@@ -66,19 +66,12 @@ async function handleAuth() {
     if (confirm.style.display !== 'none') {
       if (pin.length < 4) { error.textContent = 'El PIN debe tener al menos 4 caracteres'; return; }
       if (pin !== confirm.value) { error.textContent = 'Los PINs no coinciden'; return; }
-      const res = await fetch('/api/auth/setup', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin })
-      });
-      const data = await res.json();
-      if (data.success) enterApp();
-      else error.textContent = data.error;
+      var result = await postJSON('/api/auth/setup', { pin: pin });
+      if (result.data.success) enterApp();
+      else error.textContent = result.data.error;
     } else {
-      const res = await fetch('/api/auth/verify', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin })
-      });
-      if (res.ok) enterApp();
+      var result = await postJSON('/api/auth/verify', { pin: pin });
+      if (result.ok) enterApp();
       else error.textContent = 'PIN incorrecto';
     }
   } catch (err) {
@@ -234,33 +227,27 @@ async function addSong() {
     var track = selectedTrack.add;
     if (!track) { showToast('Busca y selecciona una cancion primero', 'error'); return; }
 
-    var body = {
-      title: track.title,
-      artist: track.artist,
-      original_key: document.getElementById('add-key').value,
+    var payload = {
+      title: String(track.title || ''),
+      artist: String(track.artist || ''),
+      original_key: document.getElementById('add-key').value || '',
       semitone_shift: parseInt(document.getElementById('add-semitones').value) || 0,
-      octave_down: document.getElementById('add-octave-down').checked,
-      deezer_id: track.id || null,
-      album_cover: track.coverMedium || track.cover || ''
+      octave_down: !!document.getElementById('add-octave-down').checked,
+      deezer_id: track.id ? Number(track.id) : null,
+      album_cover: String(track.coverMedium || track.cover || '')
     };
 
-    var res = await fetch('/api/songs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
+    var result = await postJSON('/api/songs', payload);
 
-    if (res.ok) {
-      var song = await res.json();
-      songs.unshift(song);
+    if (result.ok) {
+      songs.unshift(result.data);
       showToast('Cancion registrada', 'success');
       clearAddSelection();
       document.getElementById('add-key').value = '';
       document.getElementById('add-semitones').value = '0';
       document.getElementById('add-octave-down').checked = false;
     } else {
-      var data = await res.json();
-      showToast(data.error || 'Error al registrar', 'error');
+      showToast(result.data.error || 'Error al registrar', 'error');
     }
   } catch (err) {
     showToast('Error de conexion: ' + err.message, 'error');
@@ -304,15 +291,10 @@ async function updateSong(e) {
       semitone_shift: parseInt(document.getElementById('edit-semitones').value) || 0,
       octave_down: document.getElementById('edit-octave-down').checked
     };
-    var res = await fetch('/api/songs/' + id, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (res.ok) {
-      var updated = await res.json();
-      var idx = songs.findIndex(function(s) { return s.id === updated.id; });
-      if (idx >= 0) songs[idx] = updated;
+    var result = await putJSON('/api/songs/' + id, body);
+    if (result.ok) {
+      var idx = songs.findIndex(function(s) { return s.id === result.data.id; });
+      if (idx >= 0) songs[idx] = result.data;
       closeEditModal();
       renderSongs();
       showToast('Cancion actualizada', 'success');
@@ -337,13 +319,8 @@ async function getRecommendation() {
     var track = selectedTrack.rec;
     if (!track) { showToast('Busca y selecciona una cancion', 'error'); return; }
 
-    var body = { original_key: document.getElementById('rec-key').value || '' };
-    var res = await fetch('/api/recommend', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    var data = await res.json();
+    var result = await postJSON('/api/recommend', { original_key: document.getElementById('rec-key').value || '' });
+    var data = result.data;
     var container = document.getElementById('recommendation-result');
     var content = document.getElementById('result-content');
 
@@ -468,6 +445,24 @@ function renderDistribution(containerId, data) {
 }
 
 // --- Utils ---
+
+function sendJSON(method, url, data) {
+  return new Promise(function(resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+      var json;
+      try { json = JSON.parse(xhr.responseText); } catch (e) { json = {}; }
+      resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data: json });
+    };
+    xhr.onerror = function() { reject(new Error('Error de red')); };
+    xhr.send(JSON.stringify(data));
+  });
+}
+
+function postJSON(url, data) { return sendJSON('POST', url, data); }
+function putJSON(url, data) { return sendJSON('PUT', url, data); }
 
 function esc(str) {
   if (!str) return '';
