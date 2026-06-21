@@ -247,7 +247,7 @@ async function addSong() {
       document.getElementById('add-semitones').value = '0';
       document.getElementById('add-octave-down').checked = false;
     } else {
-      showToast(result.data.error || 'Error al registrar', 'error');
+      showToast(result.data.error || 'Error del servidor (HTTP ' + result.status + ')', 'error');
     }
   } catch (err) {
     showToast('Error de conexion: ' + err.message, 'error');

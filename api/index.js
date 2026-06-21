@@ -121,48 +121,64 @@ app.get('/api/search', async (req, res) => {
 // --- Songs ---
 
 app.get('/api/songs', async (req, res) => {
-  await initDb();
-  const result = await db.execute('SELECT * FROM songs ORDER BY created_at DESC');
-  res.json(result.rows);
+  try {
+    await initDb();
+    const result = await db.execute('SELECT * FROM songs ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Error cargando canciones: ' + err.message });
+  }
 });
 
 app.post('/api/songs', async (req, res) => {
-  await initDb();
-  const { title, artist, original_key, semitone_shift, octave_down, deezer_id, album_cover } = req.body;
-  if (!title || !artist) {
-    return res.status(400).json({ error: 'Title and artist are required' });
+  try {
+    await initDb();
+    const { title, artist, original_key, semitone_shift, octave_down, deezer_id, album_cover } = req.body || {};
+    if (!title || !artist) {
+      return res.status(400).json({ error: 'Title and artist are required' });
+    }
+    const shift = parseInt(semitone_shift) || 0;
+    const octDown = octave_down ? 1 : 0;
+    const result = await db.execute({
+      sql: 'INSERT INTO songs (title, artist, original_key, semitone_shift, octave_down, deezer_id, album_cover) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [title, artist, original_key || '', shift, octDown, deezer_id || null, album_cover || '']
+    });
+    const song = await db.execute({ sql: 'SELECT * FROM songs WHERE id = ?', args: [Number(result.lastInsertRowid)] });
+    res.json(song.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Error guardando cancion: ' + err.message });
   }
-  const shift = parseInt(semitone_shift) || 0;
-  const octDown = octave_down ? 1 : 0;
-  const result = await db.execute({
-    sql: 'INSERT INTO songs (title, artist, original_key, semitone_shift, octave_down, deezer_id, album_cover) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    args: [title, artist, original_key || '', shift, octDown, deezer_id || null, album_cover || '']
-  });
-  const song = await db.execute({ sql: 'SELECT * FROM songs WHERE id = ?', args: [Number(result.lastInsertRowid)] });
-  res.json(song.rows[0]);
 });
 
 app.delete('/api/songs/:id', async (req, res) => {
-  await initDb();
-  await db.execute({ sql: 'DELETE FROM songs WHERE id = ?', args: [parseInt(req.params.id)] });
-  res.json({ success: true });
+  try {
+    await initDb();
+    await db.execute({ sql: 'DELETE FROM songs WHERE id = ?', args: [parseInt(req.params.id)] });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error eliminando: ' + err.message });
+  }
 });
 
 app.put('/api/songs/:id', async (req, res) => {
-  await initDb();
-  const { title, artist, original_key, semitone_shift, octave_down } = req.body;
-  if (!title || !artist) {
-    return res.status(400).json({ error: 'Title and artist are required' });
+  try {
+    await initDb();
+    const { title, artist, original_key, semitone_shift, octave_down } = req.body || {};
+    if (!title || !artist) {
+      return res.status(400).json({ error: 'Title and artist are required' });
+    }
+    const shift = parseInt(semitone_shift) || 0;
+    const octDown = octave_down ? 1 : 0;
+    const id = parseInt(req.params.id);
+    await db.execute({
+      sql: 'UPDATE songs SET title=?, artist=?, original_key=?, semitone_shift=?, octave_down=? WHERE id=?',
+      args: [title, artist, original_key || '', shift, octDown, id]
+    });
+    const song = await db.execute({ sql: 'SELECT * FROM songs WHERE id = ?', args: [id] });
+    res.json(song.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Error actualizando: ' + err.message });
   }
-  const shift = parseInt(semitone_shift) || 0;
-  const octDown = octave_down ? 1 : 0;
-  const id = parseInt(req.params.id);
-  await db.execute({
-    sql: 'UPDATE songs SET title=?, artist=?, original_key=?, semitone_shift=?, octave_down=? WHERE id=?',
-    args: [title, artist, original_key || '', shift, octDown, id]
-  });
-  const song = await db.execute({ sql: 'SELECT * FROM songs WHERE id = ?', args: [id] });
-  res.json(song.rows[0]);
 });
 
 // --- Vocal profile ---
