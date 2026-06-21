@@ -1,81 +1,44 @@
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const KEYS = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+  '', 'C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B',
+  'Cm', 'C#m/Dbm', 'Dm', 'D#m/Ebm', 'Em', 'Fm', 'F#m/Gbm', 'Gm', 'G#m/Abm', 'Am', 'A#m/Bbm', 'Bm'
+];
+const KEY_VALUES = [
+  '', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
   'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm'
 ];
 
 let songs = [];
-let authenticated = false;
+let searchTimer = null;
 
-function noteToMidi(noteStr) {
-  const match = noteStr.match(/^([A-G]#?)(\d)$/);
-  if (!match) return null;
-  const [, note, octave] = match;
-  const idx = NOTES.indexOf(note);
-  if (idx === -1) return null;
-  return idx + (parseInt(octave) + 1) * 12;
-}
-
-function midiToNote(midi) {
-  const octave = Math.floor(midi / 12) - 1;
-  const idx = midi % 12;
-  return NOTES[idx] + octave;
-}
-
-// --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
-  populateNoteSelectors();
   populateKeySelectors();
   checkAuth();
-
-  document.getElementById('pin-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleAuth();
-  });
-  document.getElementById('pin-confirm').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleAuth();
+  document.getElementById('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuth(); });
+  document.getElementById('pin-confirm').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuth(); });
+  document.addEventListener('click', e => {
+    document.querySelectorAll('.search-results').forEach(r => {
+      if (!r.parentElement.contains(e.target)) r.innerHTML = '';
+    });
   });
 });
 
-function populateNoteSelectors() {
-  const noteSelects = document.querySelectorAll(
-    '#song-low-note, #song-high-note, #rec-low-note, #rec-high-note, #edit-low-note, #edit-high-note'
-  );
-  noteSelects.forEach(sel => {
-    const first = sel.querySelector('option');
-    sel.innerHTML = '';
-    if (first) sel.appendChild(first);
-    NOTES.forEach(n => {
-      const opt = document.createElement('option');
-      opt.value = n;
-      opt.textContent = n;
-      sel.appendChild(opt);
-    });
-  });
-}
-
 function populateKeySelectors() {
-  const keySelects = document.querySelectorAll('#song-key, #rec-key, #edit-key');
-  keySelects.forEach(sel => {
-    const first = sel.querySelector('option');
-    sel.innerHTML = '';
-    if (first) sel.appendChild(first);
-    KEYS.forEach(k => {
-      const opt = document.createElement('option');
-      opt.value = k;
-      opt.textContent = k;
-      sel.appendChild(opt);
-    });
+  document.querySelectorAll('#add-key, #rec-key, #edit-key').forEach(sel => {
+    sel.innerHTML = KEYS.map((label, i) =>
+      label === '' ? '<option value="">-- Sin especificar --</option>' : `<option value="${KEY_VALUES[i]}">${label}</option>`
+    ).join('');
   });
 }
 
 // --- Auth ---
+
 async function checkAuth() {
   const res = await fetch('/api/auth/status');
   const data = await res.json();
   const subtitle = document.getElementById('auth-subtitle');
   const confirm = document.getElementById('pin-confirm');
   const btn = document.getElementById('auth-btn');
-
   if (!data.pinSet) {
     subtitle.textContent = 'Configura tu PIN de acceso';
     confirm.style.display = '';
@@ -94,61 +57,108 @@ async function handleAuth() {
   error.textContent = '';
 
   if (confirm.style.display !== 'none') {
-    if (pin.length < 4) {
-      error.textContent = 'El PIN debe tener al menos 4 caracteres';
-      return;
-    }
-    if (pin !== confirm.value) {
-      error.textContent = 'Los PINs no coinciden';
-      return;
-    }
+    if (pin.length < 4) { error.textContent = 'El PIN debe tener al menos 4 caracteres'; return; }
+    if (pin !== confirm.value) { error.textContent = 'Los PINs no coinciden'; return; }
     const res = await fetch('/api/auth/setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin })
     });
     const data = await res.json();
-    if (data.success) {
-      enterApp();
-    } else {
-      error.textContent = data.error;
-    }
+    if (data.success) enterApp();
+    else error.textContent = data.error;
   } else {
     const res = await fetch('/api/auth/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin })
     });
-    if (res.ok) {
-      enterApp();
-    } else {
-      error.textContent = 'PIN incorrecto';
-      document.getElementById('pin-input').classList.add('shake');
-      setTimeout(() => document.getElementById('pin-input').classList.remove('shake'), 500);
-    }
+    if (res.ok) enterApp();
+    else error.textContent = 'PIN incorrecto';
   }
 }
 
 function enterApp() {
-  authenticated = true;
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = '';
   loadSongs();
 }
 
-// --- Navigation ---
+// --- Nav ---
+
 function showSection(name) {
   document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
   document.getElementById('section-' + name).style.display = '';
   document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
   document.querySelector(`.nav-link[data-section="${name}"]`).classList.add('active');
-
   if (name === 'dashboard') refreshDashboard();
   if (name === 'songs') renderSongs();
   if (name === 'profile') loadProfile();
 }
 
-// --- Songs ---
+// --- Search ---
+
+function onSearchInput(input, resultsId) {
+  clearTimeout(searchTimer);
+  const q = input.value.trim();
+  const container = document.getElementById(resultsId);
+  if (q.length < 2) { container.innerHTML = ''; return; }
+  searchTimer = setTimeout(() => searchSongs(q, resultsId), 300);
+}
+
+async function searchSongs(q, resultsId) {
+  const container = document.getElementById(resultsId);
+  container.innerHTML = '<div class="search-loading">Buscando...</div>';
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.data || data.data.length === 0) {
+      container.innerHTML = '<div class="search-empty">Sin resultados</div>';
+      return;
+    }
+    const prefix = resultsId.startsWith('add') ? 'add' : 'rec';
+    container.innerHTML = data.data.map(track => `
+      <div class="search-item" onclick="selectTrack('${prefix}', ${JSON.stringify(track).replace(/'/g, "\\'").replace(/"/g, '&quot;')})">
+        <img class="search-item-cover" src="${esc(track.cover)}" alt="" onerror="this.style.display='none'">
+        <div class="search-item-info">
+          <div class="search-item-title">${esc(track.title)}</div>
+          <div class="search-item-artist">${esc(track.artist)}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch {
+    container.innerHTML = '<div class="search-empty">Error de busqueda</div>';
+  }
+}
+
+function selectTrack(prefix, track) {
+  document.getElementById(prefix + '-search').style.display = 'none';
+  document.getElementById(prefix + '-results').innerHTML = '';
+  document.getElementById(prefix + '-selected').style.display = '';
+  document.getElementById(prefix + '-cover').src = track.coverMedium || track.cover || '';
+  document.getElementById(prefix + '-sel-title').textContent = track.title;
+  document.getElementById(prefix + '-sel-artist').textContent = track.artist;
+  if (prefix === 'add') {
+    document.getElementById('add-deezer-id').value = track.id;
+    document.getElementById('add-album-cover').value = track.coverMedium || track.cover || '';
+  }
+}
+
+function clearAddSelection() {
+  document.getElementById('add-search').style.display = '';
+  document.getElementById('add-search').value = '';
+  document.getElementById('add-selected').style.display = 'none';
+  document.getElementById('add-deezer-id').value = '';
+  document.getElementById('add-album-cover').value = '';
+}
+
+function clearRecSelection() {
+  document.getElementById('rec-search').style.display = '';
+  document.getElementById('rec-search').value = '';
+  document.getElementById('rec-selected').style.display = 'none';
+  document.getElementById('recommendation-result').style.display = 'none';
+}
+
+// --- Songs CRUD ---
+
 async function loadSongs() {
   const res = await fetch('/api/songs');
   songs = await res.json();
@@ -158,11 +168,10 @@ async function loadSongs() {
 function renderSongs() {
   const container = document.getElementById('songs-list');
   const noSongs = document.getElementById('no-songs');
-  const searchTerm = (document.getElementById('search-songs').value || '').toLowerCase();
+  const term = (document.getElementById('filter-songs').value || '').toLowerCase();
 
   const filtered = songs.filter(s =>
-    s.title.toLowerCase().includes(searchTerm) ||
-    s.artist.toLowerCase().includes(searchTerm)
+    s.title.toLowerCase().includes(term) || s.artist.toLowerCase().includes(term)
   );
 
   if (songs.length === 0) {
@@ -170,22 +179,23 @@ function renderSongs() {
     noSongs.style.display = '';
     return;
   }
-
   noSongs.style.display = 'none';
   container.style.display = '';
 
   container.innerHTML = filtered.map(song => {
-    const shiftLabel = song.semitone_shift === 0 ? 'Original'
-      : song.semitone_shift > 0 ? `+${song.semitone_shift} st` : `${song.semitone_shift} st`;
+    const shift = song.semitone_shift === 0 ? 'Original' : (song.semitone_shift > 0 ? `+${song.semitone_shift}` : `${song.semitone_shift}`);
+    const coverHtml = song.album_cover
+      ? `<img class="song-card-cover" src="${esc(song.album_cover)}" alt="" onerror="this.style.display='none'">`
+      : '';
     return `
       <div class="song-card">
+        ${coverHtml}
         <div class="song-info">
           <h4>${esc(song.title)}</h4>
           <div class="song-artist">${esc(song.artist)}</div>
           <div class="song-meta">
-            <span class="song-tag">Tono: ${esc(song.original_key)}</span>
-            <span class="song-tag">Rango: ${esc(song.lowest_note)} - ${esc(song.highest_note)}</span>
-            <span class="song-tag">${shiftLabel}</span>
+            ${song.original_key ? `<span class="song-tag">Tono: ${esc(song.original_key)}</span>` : ''}
+            <span class="song-tag">${shift} st</span>
           </div>
         </div>
         <div class="song-actions">
@@ -201,51 +211,31 @@ function renderSongs() {
   }).join('');
 }
 
-function filterSongs() {
-  renderSongs();
-}
-
-async function addSong(e) {
-  e.preventDefault();
-  const lowNote = document.getElementById('song-low-note').value;
-  const lowOctave = document.getElementById('song-low-octave').value;
-  const highNote = document.getElementById('song-high-note').value;
-  const highOctave = document.getElementById('song-high-octave').value;
-
-  if (!lowNote || !lowOctave || !highNote || !highOctave) {
-    showToast('Completa todas las notas', 'error');
-    return;
-  }
-
-  const lowest = lowNote + lowOctave;
-  const highest = highNote + highOctave;
-
-  if (noteToMidi(lowest) >= noteToMidi(highest)) {
-    showToast('La nota grave debe ser mas baja que la aguda', 'error');
-    return;
-  }
+async function addSong() {
+  const title = document.getElementById('add-sel-title').textContent;
+  const artist = document.getElementById('add-sel-artist').textContent;
+  if (!title || !artist) { showToast('Busca y selecciona una cancion primero', 'error'); return; }
 
   const body = {
-    title: document.getElementById('song-title').value,
-    artist: document.getElementById('song-artist').value,
-    original_key: document.getElementById('song-key').value,
-    lowest_note: lowest,
-    highest_note: highest,
-    semitone_shift: parseInt(document.getElementById('song-semitones').value) || 0
+    title,
+    artist,
+    original_key: document.getElementById('add-key').value,
+    semitone_shift: parseInt(document.getElementById('add-semitones').value) || 0,
+    deezer_id: document.getElementById('add-deezer-id').value || null,
+    album_cover: document.getElementById('add-album-cover').value || ''
   };
 
   const res = await fetch('/api/songs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-
   if (res.ok) {
     const song = await res.json();
     songs.unshift(song);
-    showToast('Cancion registrada correctamente', 'success');
-    document.getElementById('add-song-form').reset();
-    document.getElementById('song-semitones').value = '0';
+    showToast('Cancion registrada', 'success');
+    clearAddSelection();
+    document.getElementById('add-key').value = '';
+    document.getElementById('add-semitones').value = '0';
   } else {
     const data = await res.json();
     showToast(data.error || 'Error al registrar', 'error');
@@ -263,54 +253,29 @@ async function deleteSong(id) {
 function editSong(id) {
   const song = songs.find(s => s.id === id);
   if (!song) return;
-
   document.getElementById('edit-song-id').value = song.id;
   document.getElementById('edit-title').value = song.title;
   document.getElementById('edit-artist').value = song.artist;
-  document.getElementById('edit-key').value = song.original_key;
+  document.getElementById('edit-key').value = song.original_key || '';
   document.getElementById('edit-semitones').value = song.semitone_shift;
-
-  const lowMatch = song.lowest_note.match(/^([A-G]#?)(\d)$/);
-  const highMatch = song.highest_note.match(/^([A-G]#?)(\d)$/);
-  if (lowMatch) {
-    document.getElementById('edit-low-note').value = lowMatch[1];
-    document.getElementById('edit-low-octave').value = lowMatch[2];
-  }
-  if (highMatch) {
-    document.getElementById('edit-high-note').value = highMatch[1];
-    document.getElementById('edit-high-octave').value = highMatch[2];
-  }
-
   document.getElementById('edit-modal').style.display = '';
 }
 
-function closeEditModal() {
-  document.getElementById('edit-modal').style.display = 'none';
-}
+function closeEditModal() { document.getElementById('edit-modal').style.display = 'none'; }
 
 async function updateSong(e) {
   e.preventDefault();
   const id = document.getElementById('edit-song-id').value;
-  const lowNote = document.getElementById('edit-low-note').value;
-  const lowOctave = document.getElementById('edit-low-octave').value;
-  const highNote = document.getElementById('edit-high-note').value;
-  const highOctave = document.getElementById('edit-high-octave').value;
-
   const body = {
     title: document.getElementById('edit-title').value,
     artist: document.getElementById('edit-artist').value,
     original_key: document.getElementById('edit-key').value,
-    lowest_note: lowNote + lowOctave,
-    highest_note: highNote + highOctave,
     semitone_shift: parseInt(document.getElementById('edit-semitones').value) || 0
   };
-
   const res = await fetch(`/api/songs/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-
   if (res.ok) {
     const updated = await res.json();
     const idx = songs.findIndex(s => s.id === updated.id);
@@ -318,65 +283,32 @@ async function updateSong(e) {
     closeEditModal();
     renderSongs();
     showToast('Cancion actualizada', 'success');
-  } else {
-    const data = await res.json();
-    showToast(data.error || 'Error al actualizar', 'error');
   }
 }
 
-function adjustSemitone(delta) {
-  const input = document.getElementById('song-semitones');
+function adjustSemitone(inputId, delta) {
+  const input = document.getElementById(inputId);
   let val = parseInt(input.value) || 0;
-  val = Math.max(-12, Math.min(12, val + delta));
-  input.value = val;
-}
-
-function adjustEditSemitone(delta) {
-  const input = document.getElementById('edit-semitones');
-  let val = parseInt(input.value) || 0;
-  val = Math.max(-12, Math.min(12, val + delta));
-  input.value = val;
+  input.value = Math.max(-12, Math.min(12, val + delta));
 }
 
 // --- Recommendation ---
-async function getRecommendation(e) {
-  e.preventDefault();
-  const lowNote = document.getElementById('rec-low-note').value;
-  const lowOctave = document.getElementById('rec-low-octave').value;
-  const highNote = document.getElementById('rec-high-note').value;
-  const highOctave = document.getElementById('rec-high-octave').value;
 
-  if (!lowNote || !lowOctave || !highNote || !highOctave) {
-    showToast('Completa todas las notas', 'error');
-    return;
-  }
+async function getRecommendation() {
+  const title = document.getElementById('rec-sel-title').textContent;
+  if (!title) { showToast('Busca y selecciona una cancion', 'error'); return; }
 
-  const lowest = lowNote + lowOctave;
-  const highest = highNote + highOctave;
-
-  if (noteToMidi(lowest) >= noteToMidi(highest)) {
-    showToast('La nota grave debe ser mas baja que la aguda', 'error');
-    return;
-  }
-
-  const body = {
-    lowest_note: lowest,
-    highest_note: highest,
-    original_key: document.getElementById('rec-key').value || undefined
-  };
-
+  const body = { original_key: document.getElementById('rec-key').value || '' };
   const res = await fetch('/api/recommend', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-
   const data = await res.json();
   const container = document.getElementById('recommendation-result');
   const content = document.getElementById('result-content');
 
   if (!data.recommendation) {
-    content.innerHTML = `<div class="empty-state"><p>${data.message}</p></div>`;
+    content.innerHTML = `<div class="empty-state" style="padding:1.5rem"><p>${data.message}</p></div>`;
     container.style.display = '';
     return;
   }
@@ -384,156 +316,119 @@ async function getRecommendation(e) {
   const r = data.recommendation;
   const shiftDisplay = r.semitones === 0 ? '0' : (r.semitones > 0 ? `+${r.semitones}` : `${r.semitones}`);
 
+  const confidenceLabel = { high: 'Alta', medium: 'Media', low: 'Baja' }[r.confidence] || r.confidence;
+  const confidenceClass = r.confidence;
+
   content.innerHTML = `
     <div class="result-main">
       <div class="result-shift">${shiftDisplay}</div>
       <div>
-        <div class="result-direction">${r.direction}</div>
-        <div class="result-detail">${r.new_key ? `Nueva tonalidad: ${r.new_key}` : ''}</div>
+        <div class="result-direction">${r.direction || (r.message || '')}</div>
+        ${r.new_key ? `<div class="result-detail">Tonalidad resultante: <b>${r.new_key}</b></div>` : ''}
       </div>
     </div>
     <div class="result-grid">
-      <div class="result-item">
-        <div class="result-item-label">Rango original</div>
-        <div class="result-item-value">${lowest} - ${highest}</div>
-      </div>
-      <div class="result-item">
-        <div class="result-item-label">Rango transpuesto</div>
-        <div class="result-item-value">${r.transposed_range.low} - ${r.transposed_range.high}</div>
-      </div>
-      <div class="result-item">
-        <div class="result-item-label">Tu nota mas grave</div>
-        <div class="result-item-value">${r.vocal_range.low}</div>
-      </div>
-      <div class="result-item">
-        <div class="result-item-label">Tu nota mas aguda</div>
-        <div class="result-item-value">${r.vocal_range.high}</div>
-      </div>
+      ${r.original_key ? `<div class="result-item"><div class="result-item-label">Tonalidad original</div><div class="result-item-value">${r.original_key}</div></div>` : ''}
+      ${r.new_key ? `<div class="result-item"><div class="result-item-label">Tu tonalidad</div><div class="result-item-value">${r.new_key}</div></div>` : ''}
+      <div class="result-item"><div class="result-item-label">Canciones analizadas</div><div class="result-item-value">${r.songCount}</div></div>
+      <div class="result-item"><div class="result-item-label">Confianza</div><div class="result-item-value confidence-${confidenceClass}">${confidenceLabel}</div></div>
     </div>
-    <div class="result-fit ${r.fits_range ? 'fits' : 'no-fit'}">
-      ${r.fits_range
-        ? 'La cancion encaja dentro de tu rango vocal estimado'
-        : 'La cancion podria quedar ligeramente fuera de tu rango comodo'}
-    </div>
+    ${r.method === 'average' ? `<div class="result-fit no-fit">Indica la tonalidad original para una recomendacion mas precisa</div>` : ''}
+    ${r.confidence === 'medium' ? `<div class="result-fit no-fit">Registra mas canciones con tonalidad para mejorar la precision</div>` : ''}
+    ${r.confidence === 'high' && r.method === 'key-pattern' ? `<div class="result-fit fits">Recomendacion basada en tu patron de ${r.songsAnalyzed} canciones</div>` : ''}
   `;
   container.style.display = '';
 }
 
 // --- Dashboard ---
+
 async function refreshDashboard() {
   document.getElementById('stat-songs').textContent = songs.length;
 
-  const res = await fetch('/api/vocal-range');
-  const range = await res.json();
+  const res = await fetch('/api/vocal-profile');
+  const profile = await res.json();
 
-  if (range.estimated) {
-    document.getElementById('stat-range').textContent = `${range.lowest} - ${range.highest}`;
-    document.getElementById('stat-semitones').textContent = range.range + ' st';
-    renderPiano('dashboard-piano', range.lowestMidi, range.highestMidi);
-    document.getElementById('dashboard-range-label').textContent =
-      `${range.lowest} a ${range.highest} (${range.range} semitonos)`;
+  if (profile.estimated) {
+    const avg = profile.averageShift;
+    document.getElementById('stat-avg-shift').textContent = (avg >= 0 ? '+' : '') + avg + ' st';
+
+    const topKey = Object.entries(profile.effectiveKeyDistribution || {}).sort((a, b) => b[1] - a[1])[0];
+    document.getElementById('stat-top-key').textContent = topKey ? topKey[0] : '--';
   } else {
-    document.getElementById('stat-range').textContent = '--';
-    document.getElementById('stat-semitones').textContent = '--';
-    document.getElementById('dashboard-piano').innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">Registra canciones para ver tu rango</p>';
-    document.getElementById('dashboard-range-label').textContent = '';
+    document.getElementById('stat-avg-shift').textContent = '--';
+    document.getElementById('stat-top-key').textContent = '--';
   }
 
-  const recentList = document.getElementById('recent-songs-list');
+  const list = document.getElementById('recent-songs-list');
   const recent = songs.slice(0, 5);
   if (recent.length === 0) {
-    recentList.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:1rem">Sin canciones registradas</p>';
+    list.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:1rem">Sin canciones registradas</p>';
   } else {
-    recentList.innerHTML = recent.map(s => {
-      const shift = s.semitone_shift === 0 ? 'Original' : (s.semitone_shift > 0 ? `+${s.semitone_shift} st` : `${s.semitone_shift} st`);
+    list.innerHTML = recent.map(s => {
+      const shift = s.semitone_shift === 0 ? 'Original' : (s.semitone_shift > 0 ? `+${s.semitone_shift}` : `${s.semitone_shift}`);
       return `
         <div class="song-mini">
+          ${s.album_cover ? `<img class="song-mini-cover" src="${esc(s.album_cover)}" alt="" onerror="this.style.display='none'">` : ''}
           <div class="song-mini-info">
             <span class="song-mini-title">${esc(s.title)}</span>
             <span class="song-mini-artist">${esc(s.artist)}</span>
           </div>
-          <span class="song-mini-shift">${shift}</span>
-        </div>
-      `;
+          <span class="song-mini-shift">${shift} st</span>
+        </div>`;
     }).join('');
   }
 }
 
 // --- Profile ---
-async function loadProfile() {
-  const res = await fetch('/api/vocal-range');
-  const range = await res.json();
 
-  if (!range.estimated) {
+async function loadProfile() {
+  const res = await fetch('/api/vocal-profile');
+  const profile = await res.json();
+
+  if (!profile.estimated) {
     document.getElementById('profile-content').style.display = 'none';
     document.getElementById('profile-empty').style.display = '';
     return;
   }
-
   document.getElementById('profile-content').style.display = '';
   document.getElementById('profile-empty').style.display = 'none';
 
-  document.getElementById('profile-low').textContent = range.lowest;
-  document.getElementById('profile-high').textContent = range.highest;
-  document.getElementById('profile-range-semitones').textContent = range.range + ' semitonos';
-  document.getElementById('profile-song-count').textContent = range.songCount;
+  document.getElementById('profile-song-count').textContent = profile.songCount;
+  const avg = profile.averageShift;
+  document.getElementById('profile-avg-shift').textContent = (avg >= 0 ? '+' : '') + avg + ' st';
+  document.getElementById('profile-with-keys').textContent = profile.songsWithKeys;
 
-  renderPiano('profile-piano', range.lowestMidi, range.highestMidi);
-
-  const dist = {};
-  songs.forEach(s => {
-    const key = s.original_key;
-    dist[key] = (dist[key] || 0) + 1;
-  });
-
-  const sorted = Object.entries(dist).sort((a, b) => b[1] - a[1]);
-  const maxCount = sorted.length > 0 ? sorted[0][1] : 1;
-
-  const distContainer = document.getElementById('songs-distribution');
-  if (sorted.length === 0) {
-    distContainer.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">Sin datos</p>';
-  } else {
-    distContainer.innerHTML = sorted.map(([key, count]) => `
-      <div class="dist-bar">
-        <span class="dist-bar-label">${esc(key)}</span>
-        <div class="dist-bar-track">
-          <div class="dist-bar-fill" style="width:${(count / maxCount * 100).toFixed(0)}%"></div>
-        </div>
-        <span class="dist-bar-count">${count}</span>
-      </div>
-    `).join('');
-  }
+  renderDistribution('shift-distribution', profile.shiftDistribution || {});
+  renderDistribution('key-distribution', profile.effectiveKeyDistribution || {});
 }
 
-// --- Piano visualization ---
-function renderPiano(containerId, lowMidi, highMidi) {
+function renderDistribution(containerId, data) {
   const container = document.getElementById(containerId);
-  const startMidi = Math.max(24, lowMidi - 5);
-  const endMidi = Math.min(96, highMidi + 5);
+  const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  const max = sorted.length > 0 ? sorted[0][1] : 1;
 
-  let html = '';
-  for (let midi = startMidi; midi <= endMidi; midi++) {
-    const noteIdx = midi % 12;
-    const isBlack = [1, 3, 6, 8, 10].includes(noteIdx);
-    const inRange = midi >= lowMidi && midi <= highMidi;
-    const isEdge = midi === lowMidi || midi === highMidi;
-
-    let cls = 'piano-key';
-    if (isBlack) cls += ' black';
-    if (inRange) cls += ' in-range';
-    if (isEdge) cls += ' low-note';
-
-    const note = midiToNote(midi);
-    html += `<div class="${cls}" title="${note}"></div>`;
+  if (sorted.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem">Sin datos</p>';
+    return;
   }
-  container.innerHTML = html;
+  container.innerHTML = sorted.map(([label, count]) => `
+    <div class="dist-bar">
+      <span class="dist-bar-label">${esc(label)}</span>
+      <div class="dist-bar-track">
+        <div class="dist-bar-fill" style="width:${(count / max * 100).toFixed(0)}%"></div>
+      </div>
+      <span class="dist-bar-count">${count}</span>
+    </div>
+  `).join('');
 }
 
-// --- Utilities ---
+// --- Utils ---
+
 function esc(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
 }
 
 function showToast(message, type) {

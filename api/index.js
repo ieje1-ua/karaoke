@@ -24,10 +24,10 @@ async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       artist TEXT NOT NULL,
-      original_key TEXT NOT NULL,
-      lowest_note TEXT NOT NULL,
-      highest_note TEXT NOT NULL,
+      original_key TEXT DEFAULT '',
       semitone_shift INTEGER NOT NULL DEFAULT 0,
+      deezer_id INTEGER,
+      album_cover TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
@@ -36,25 +36,21 @@ async function initDb() {
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-function noteToMidi(noteStr) {
-  const match = noteStr.match(/^([A-G]#?)(\d)$/);
-  if (!match) return null;
-  const [, note, octave] = match;
-  const noteIndex = NOTES.indexOf(note);
-  if (noteIndex === -1) return null;
-  return noteIndex + (parseInt(octave) + 1) * 12;
+const FLATS_TO_SHARPS = { 'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B' };
+
+function keyToIndex(key) {
+  let base = key.replace(/m$/, '');
+  if (FLATS_TO_SHARPS[base]) base = FLATS_TO_SHARPS[base];
+  return NOTES.indexOf(base);
 }
 
-function midiToNote(midi) {
-  const octave = Math.floor(midi / 12) - 1;
-  const noteIndex = midi % 12;
-  return NOTES[noteIndex] + octave;
+function indexToKey(idx) {
+  return NOTES[((idx % 12) + 12) % 12];
 }
 
-function transposeNote(noteStr, semitones) {
-  const midi = noteToMidi(noteStr);
-  if (midi === null) return noteStr;
-  return midiToNote(midi + semitones);
+function circularDistance(a, b) {
+  const diff = Math.abs(a - b);
+  return Math.min(diff, 12 - diff);
 }
 
 // --- Auth ---
@@ -94,6 +90,28 @@ app.post('/api/auth/verify', async (req, res) => {
   }
 });
 
+// --- Deezer search proxy ---
+
+app.get('/api/search', async (req, res) => {
+  const q = req.query.q;
+  if (!q || q.length < 2) return res.json({ data: [] });
+  try {
+    const response = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=6`);
+    const data = await response.json();
+    const results = (data.data || []).map(track => ({
+      id: track.id,
+      title: track.title,
+      artist: track.artist?.name || '',
+      album: track.album?.title || '',
+      cover: track.album?.cover_small || '',
+      coverMedium: track.album?.cover_medium || ''
+    }));
+    res.json({ data: results });
+  } catch {
+    res.json({ data: [] });
+  }
+});
+
 // --- Songs ---
 
 app.get('/api/songs', async (req, res) => {
@@ -104,17 +122,14 @@ app.get('/api/songs', async (req, res) => {
 
 app.post('/api/songs', async (req, res) => {
   await initDb();
-  const { title, artist, original_key, lowest_note, highest_note, semitone_shift } = req.body;
-  if (!title || !artist || !original_key || !lowest_note || !highest_note) {
-    return res.status(400).json({ error: 'All fields are required' });
-  }
-  if (noteToMidi(lowest_note) === null || noteToMidi(highest_note) === null) {
-    return res.status(400).json({ error: 'Invalid note format. Use format like C4, F#3, etc.' });
+  const { title, artist, original_key, semitone_shift, deezer_id, album_cover } = req.body;
+  if (!title || !artist) {
+    return res.status(400).json({ error: 'Title and artist are required' });
   }
   const shift = parseInt(semitone_shift) || 0;
   const result = await db.execute({
-    sql: 'INSERT INTO songs (title, artist, original_key, lowest_note, highest_note, semitone_shift) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [title, artist, original_key, lowest_note, highest_note, shift]
+    sql: 'INSERT INTO songs (title, artist, original_key, semitone_shift, deezer_id, album_cover) VALUES (?, ?, ?, ?, ?, ?)',
+    args: [title, artist, original_key || '', shift, deezer_id || null, album_cover || '']
   });
   const song = await db.execute({ sql: 'SELECT * FROM songs WHERE id = ?', args: [Number(result.lastInsertRowid)] });
   res.json(song.rows[0]);
@@ -128,51 +143,65 @@ app.delete('/api/songs/:id', async (req, res) => {
 
 app.put('/api/songs/:id', async (req, res) => {
   await initDb();
-  const { title, artist, original_key, lowest_note, highest_note, semitone_shift } = req.body;
-  if (!title || !artist || !original_key || !lowest_note || !highest_note) {
-    return res.status(400).json({ error: 'All fields are required' });
-  }
-  if (noteToMidi(lowest_note) === null || noteToMidi(highest_note) === null) {
-    return res.status(400).json({ error: 'Invalid note format' });
+  const { title, artist, original_key, semitone_shift } = req.body;
+  if (!title || !artist) {
+    return res.status(400).json({ error: 'Title and artist are required' });
   }
   const shift = parseInt(semitone_shift) || 0;
   const id = parseInt(req.params.id);
   await db.execute({
-    sql: 'UPDATE songs SET title=?, artist=?, original_key=?, lowest_note=?, highest_note=?, semitone_shift=? WHERE id=?',
-    args: [title, artist, original_key, lowest_note, highest_note, shift, id]
+    sql: 'UPDATE songs SET title=?, artist=?, original_key=?, semitone_shift=? WHERE id=?',
+    args: [title, artist, original_key || '', shift, id]
   });
   const song = await db.execute({ sql: 'SELECT * FROM songs WHERE id = ?', args: [id] });
   res.json(song.rows[0]);
 });
 
-// --- Vocal range ---
+// --- Vocal profile ---
 
-app.get('/api/vocal-range', async (req, res) => {
+app.get('/api/vocal-profile', async (req, res) => {
   await initDb();
   const result = await db.execute('SELECT * FROM songs');
   const songs = result.rows;
+
   if (songs.length === 0) {
-    return res.json({ estimated: false, message: 'Add songs to estimate your vocal range' });
+    return res.json({ estimated: false });
   }
 
-  let lowestMidi = Infinity;
-  let highestMidi = -Infinity;
+  const songsWithKeys = songs.filter(s => s.original_key && keyToIndex(s.original_key) !== -1);
+  const effectiveKeys = songsWithKeys.map(s => {
+    const ki = keyToIndex(s.original_key);
+    return ((ki + s.semitone_shift) % 12 + 12) % 12;
+  });
 
-  for (const song of songs) {
-    const transposedLow = noteToMidi(song.lowest_note) + song.semitone_shift;
-    const transposedHigh = noteToMidi(song.highest_note) + song.semitone_shift;
-    if (transposedLow < lowestMidi) lowestMidi = transposedLow;
-    if (transposedHigh > highestMidi) highestMidi = transposedHigh;
-  }
+  const shifts = songs.map(s => s.semitone_shift);
+  const avgShift = shifts.reduce((a, b) => a + b, 0) / shifts.length;
+
+  const keyDistribution = {};
+  effectiveKeys.forEach(k => {
+    const name = NOTES[k];
+    keyDistribution[name] = (keyDistribution[name] || 0) + 1;
+  });
+
+  const originalKeyDist = {};
+  songsWithKeys.forEach(s => {
+    originalKeyDist[s.original_key] = (originalKeyDist[s.original_key] || 0) + 1;
+  });
+
+  const shiftDistribution = {};
+  shifts.forEach(s => {
+    const label = s === 0 ? '0' : (s > 0 ? `+${s}` : `${s}`);
+    shiftDistribution[label] = (shiftDistribution[label] || 0) + 1;
+  });
 
   res.json({
     estimated: true,
-    lowest: midiToNote(lowestMidi),
-    highest: midiToNote(highestMidi),
-    lowestMidi,
-    highestMidi,
-    range: highestMidi - lowestMidi,
-    songCount: songs.length
+    songCount: songs.length,
+    songsWithKeys: songsWithKeys.length,
+    averageShift: Math.round(avgShift * 10) / 10,
+    effectiveKeyDistribution: keyDistribution,
+    originalKeyDistribution: originalKeyDist,
+    shiftDistribution
   });
 });
 
@@ -180,47 +209,62 @@ app.get('/api/vocal-range', async (req, res) => {
 
 app.post('/api/recommend', async (req, res) => {
   await initDb();
-  const { lowest_note, highest_note } = req.body;
-  if (!lowest_note || !highest_note) {
-    return res.status(400).json({ error: 'Provide lowest and highest notes of the song' });
-  }
-
-  const songLow = noteToMidi(lowest_note);
-  const songHigh = noteToMidi(highest_note);
-  if (songLow === null || songHigh === null) {
-    return res.status(400).json({ error: 'Invalid note format' });
-  }
+  const { original_key } = req.body;
 
   const result = await db.execute('SELECT * FROM songs');
   const songs = result.rows;
+
   if (songs.length === 0) {
-    return res.json({ recommendation: null, message: 'Add songs first to get recommendations' });
+    return res.json({ recommendation: null, message: 'Registra canciones primero para obtener recomendaciones' });
   }
 
-  let vocalLow = Infinity;
-  let vocalHigh = -Infinity;
-  for (const song of songs) {
-    const tLow = noteToMidi(song.lowest_note) + song.semitone_shift;
-    const tHigh = noteToMidi(song.highest_note) + song.semitone_shift;
-    if (tLow < vocalLow) vocalLow = tLow;
-    if (tHigh > vocalHigh) vocalHigh = tHigh;
+  const shifts = songs.map(s => s.semitone_shift);
+  const avgShift = Math.round(shifts.reduce((a, b) => a + b, 0) / shifts.length);
+
+  if (!original_key || keyToIndex(original_key) === -1) {
+    return res.json({
+      recommendation: {
+        semitones: avgShift,
+        confidence: 'low',
+        method: 'average',
+        message: `Sin tonalidad, se usa tu ajuste medio: ${avgShift >= 0 ? '+' : ''}${avgShift} semitonos`,
+        songCount: songs.length
+      }
+    });
   }
+
+  const songKeyIdx = keyToIndex(original_key);
+  const isMinor = original_key.endsWith('m');
+  const songsWithKeys = songs.filter(s => s.original_key && keyToIndex(s.original_key) !== -1);
+
+  if (songsWithKeys.length === 0) {
+    return res.json({
+      recommendation: {
+        semitones: avgShift,
+        confidence: 'low',
+        method: 'average',
+        message: `Sin datos de tonalidad en tus canciones, se usa tu ajuste medio: ${avgShift >= 0 ? '+' : ''}${avgShift} semitonos`,
+        songCount: songs.length
+      }
+    });
+  }
+
+  const effectiveKeys = songsWithKeys.map(s => {
+    const ki = keyToIndex(s.original_key);
+    return ((ki + s.semitone_shift) % 12 + 12) % 12;
+  });
 
   let bestShift = 0;
   let bestScore = Infinity;
 
-  for (let shift = -12; shift <= 12; shift++) {
-    const newLow = songLow + shift;
-    const newHigh = songHigh + shift;
+  for (let shift = -6; shift <= 6; shift++) {
+    const newKey = ((songKeyIdx + shift) % 12 + 12) % 12;
 
     let score = 0;
-    if (newLow < vocalLow) score += (vocalLow - newLow) * 3;
-    if (newHigh > vocalHigh) score += (newHigh - vocalHigh) * 3;
-    score += Math.abs(shift) * 0.5;
-
-    const vocalCenter = (vocalLow + vocalHigh) / 2;
-    const songCenter = (newLow + newHigh) / 2;
-    score += Math.abs(songCenter - vocalCenter) * 0.3;
+    for (const ek of effectiveKeys) {
+      score += circularDistance(newKey, ek);
+    }
+    score += Math.abs(shift) * 0.4;
 
     if (score < bestScore) {
       bestScore = score;
@@ -228,26 +272,24 @@ app.post('/api/recommend', async (req, res) => {
     }
   }
 
-  const transposedLow = midiToNote(songLow + bestShift);
-  const transposedHigh = midiToNote(songHigh + bestShift);
+  const newKeyIdx = ((songKeyIdx + bestShift) % 12 + 12) % 12;
+  const newKeyName = NOTES[newKeyIdx] + (isMinor ? 'm' : '');
 
   let direction;
-  if (bestShift === 0) direction = 'No change needed';
-  else if (bestShift > 0) direction = `Raise ${bestShift} semitone${bestShift > 1 ? 's' : ''}`;
-  else direction = `Lower ${Math.abs(bestShift)} semitone${Math.abs(bestShift) > 1 ? 's' : ''}`;
-
-  const newKey = req.body.original_key
-    ? transposeNote(req.body.original_key.replace(/m$/, ''), bestShift) + (req.body.original_key.endsWith('m') ? 'm' : '')
-    : null;
+  if (bestShift === 0) direction = 'Sin cambio';
+  else if (bestShift > 0) direction = `Subir ${bestShift} semitono${bestShift > 1 ? 's' : ''}`;
+  else direction = `Bajar ${Math.abs(bestShift)} semitono${Math.abs(bestShift) > 1 ? 's' : ''}`;
 
   res.json({
     recommendation: {
       semitones: bestShift,
       direction,
-      transposed_range: { low: transposedLow, high: transposedHigh },
-      new_key: newKey,
-      vocal_range: { low: midiToNote(vocalLow), high: midiToNote(vocalHigh) },
-      fits_range: (songLow + bestShift) >= vocalLow && (songHigh + bestShift) <= vocalHigh
+      original_key: original_key,
+      new_key: newKeyName,
+      confidence: songsWithKeys.length >= 3 ? 'high' : 'medium',
+      method: 'key-pattern',
+      songCount: songs.length,
+      songsAnalyzed: songsWithKeys.length
     }
   });
 });

@@ -31,14 +31,11 @@
 
   <!-- Main App -->
   <div id="app-screen" class="screen" style="display:none">
-    <!-- Navigation -->
     <nav class="navbar">
       <div class="nav-brand">
         <div class="brand-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M9 18V5l12-2v13"/>
-            <circle cx="6" cy="18" r="3"/>
-            <circle cx="18" cy="16" r="3"/>
+            <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
           </svg>
         </div>
         <span class="brand-text">Karaoke Transposer</span>
@@ -50,7 +47,7 @@
         </button>
         <button class="nav-link" data-section="songs" onclick="showSection('songs')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          <span>Mis Canciones</span>
+          <span>Canciones</span>
         </button>
         <button class="nav-link" data-section="add-song" onclick="showSection('add-song')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>
@@ -62,12 +59,12 @@
         </button>
         <button class="nav-link" data-section="profile" onclick="showSection('profile')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <span>Perfil Vocal</span>
+          <span>Perfil</span>
         </button>
       </div>
     </nav>
 
-    <!-- Dashboard Section -->
+    <!-- Dashboard -->
     <section id="section-dashboard" class="section">
       <div class="section-header">
         <h2 class="section-title">Dashboard</h2>
@@ -75,31 +72,20 @@
       </div>
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          </div>
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
           <div class="stat-value" id="stat-songs">0</div>
-          <div class="stat-label">Canciones registradas</div>
+          <div class="stat-label">Canciones</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </div>
-          <div class="stat-value" id="stat-range">--</div>
-          <div class="stat-label">Rango vocal estimado</div>
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+          <div class="stat-value" id="stat-avg-shift">--</div>
+          <div class="stat-label">Ajuste medio</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </div>
-          <div class="stat-value" id="stat-semitones">--</div>
-          <div class="stat-label">Semitonos de rango</div>
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></div>
+          <div class="stat-value" id="stat-top-key">--</div>
+          <div class="stat-label">Tonalidad preferida</div>
         </div>
-      </div>
-      <div class="dashboard-visual">
-        <h3>Tu rango en el piano</h3>
-        <div id="dashboard-piano" class="piano-container"></div>
-        <div id="dashboard-range-label" class="range-label"></div>
       </div>
       <div class="recent-songs">
         <h3>Canciones recientes</h3>
@@ -107,14 +93,14 @@
       </div>
     </section>
 
-    <!-- Songs Section -->
+    <!-- Songs -->
     <section id="section-songs" class="section" style="display:none">
       <div class="section-header">
         <h2 class="section-title">Mis Canciones</h2>
         <p class="section-desc">Todas las canciones que has registrado</p>
       </div>
       <div class="songs-toolbar">
-        <input type="text" id="search-songs" class="input-field" placeholder="Buscar canciones..." oninput="filterSongs()">
+        <input type="text" id="filter-songs" class="input-field" placeholder="Filtrar canciones..." oninput="renderSongs()">
       </div>
       <div id="songs-list" class="songs-grid"></div>
       <div id="no-songs" class="empty-state" style="display:none">
@@ -124,181 +110,127 @@
       </div>
     </section>
 
-    <!-- Add Song Section -->
+    <!-- Add Song -->
     <section id="section-add-song" class="section" style="display:none">
       <div class="section-header">
         <h2 class="section-title">Registrar Cancion</h2>
-        <p class="section-desc">Anade una cancion con su tonalidad comoda</p>
+        <p class="section-desc">Busca la cancion y pon tu ajuste de semitonos</p>
       </div>
-      <form id="add-song-form" class="form-card" onsubmit="addSong(event)">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Titulo</label>
-            <input type="text" id="song-title" class="input-field" placeholder="Nombre de la cancion" required>
-          </div>
-          <div class="form-group">
-            <label>Artista</label>
-            <input type="text" id="song-artist" class="input-field" placeholder="Artista o banda" required>
+      <div class="form-card">
+        <div class="form-group">
+          <label>Buscar cancion</label>
+          <div class="search-wrap">
+            <input type="text" id="add-search" class="input-field search-input" placeholder="Titulo o artista..." autocomplete="off" oninput="onSearchInput(this, 'add-results')">
+            <div id="add-results" class="search-results"></div>
           </div>
         </div>
+        <div id="add-selected" class="selected-song" style="display:none">
+          <img id="add-cover" class="selected-cover" src="" alt="">
+          <div class="selected-info">
+            <div class="selected-title" id="add-sel-title"></div>
+            <div class="selected-artist" id="add-sel-artist"></div>
+          </div>
+          <button class="btn-icon" onclick="clearAddSelection()" title="Cambiar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <input type="hidden" id="add-deezer-id">
+        <input type="hidden" id="add-album-cover">
         <div class="form-row">
           <div class="form-group">
-            <label>Tonalidad original</label>
-            <select id="song-key" class="input-field" required>
-              <option value="">Selecciona...</option>
-            </select>
+            <label>Tonalidad original <span class="optional">(opcional)</span></label>
+            <select id="add-key" class="input-field"></select>
           </div>
           <div class="form-group">
-            <label>Ajuste de semitonos</label>
+            <label>Tu ajuste de semitonos</label>
             <div class="semitone-control">
-              <button type="button" class="semitone-btn" onclick="adjustSemitone(-1)">-</button>
-              <input type="number" id="song-semitones" class="input-field semitone-input" value="0" min="-12" max="12">
-              <button type="button" class="semitone-btn" onclick="adjustSemitone(1)">+</button>
-            </div>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Nota mas grave de la cancion</label>
-            <div class="note-selector">
-              <select id="song-low-note" class="input-field" required>
-                <option value="">Nota</option>
-              </select>
-              <select id="song-low-octave" class="input-field" required>
-                <option value="">Octava</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Nota mas aguda de la cancion</label>
-            <div class="note-selector">
-              <select id="song-high-note" class="input-field" required>
-                <option value="">Nota</option>
-              </select>
-              <select id="song-high-octave" class="input-field" required>
-                <option value="">Octava</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-              </select>
+              <button type="button" class="semitone-btn" onclick="adjustSemitone('add-semitones', -1)">-</button>
+              <input type="number" id="add-semitones" class="input-field semitone-input" value="0" min="-12" max="12">
+              <button type="button" class="semitone-btn" onclick="adjustSemitone('add-semitones', 1)">+</button>
             </div>
           </div>
         </div>
         <div class="form-info">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
-          <span>Las notas se refieren a la melodia vocal de la cancion original (antes de transponer). El ajuste de semitonos es lo que tu aplicas al cantar.</span>
+          <span>El ajuste es lo que pones en tu maquina de karaoke. Ej: si bajas 2 tonos, pon <b>-2</b>.</span>
         </div>
-        <button type="submit" class="btn btn-primary btn-glow">
+        <button class="btn btn-primary btn-glow" onclick="addSong()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
-          Registrar Cancion
+          Registrar
         </button>
-      </form>
+      </div>
     </section>
 
-    <!-- Recommend Section -->
+    <!-- Recommend -->
     <section id="section-recommend" class="section" style="display:none">
       <div class="section-header">
         <h2 class="section-title">Recomendar Transposicion</h2>
-        <p class="section-desc">Introduce los datos de una cancion nueva y te dire cuantos semitonos ajustar</p>
+        <p class="section-desc">Busca una cancion y te digo cuantos semitonos ajustar</p>
       </div>
-      <form id="recommend-form" class="form-card" onsubmit="getRecommendation(event)">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Tonalidad original (opcional)</label>
-            <select id="rec-key" class="input-field">
-              <option value="">Selecciona...</option>
-            </select>
+      <div class="form-card">
+        <div class="form-group">
+          <label>Buscar cancion</label>
+          <div class="search-wrap">
+            <input type="text" id="rec-search" class="input-field search-input" placeholder="Titulo o artista..." autocomplete="off" oninput="onSearchInput(this, 'rec-results')">
+            <div id="rec-results" class="search-results"></div>
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Nota mas grave de la cancion</label>
-            <div class="note-selector">
-              <select id="rec-low-note" class="input-field" required>
-                <option value="">Nota</option>
-              </select>
-              <select id="rec-low-octave" class="input-field" required>
-                <option value="">Octava</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-              </select>
-            </div>
+        <div id="rec-selected" class="selected-song" style="display:none">
+          <img id="rec-cover" class="selected-cover" src="" alt="">
+          <div class="selected-info">
+            <div class="selected-title" id="rec-sel-title"></div>
+            <div class="selected-artist" id="rec-sel-artist"></div>
           </div>
-          <div class="form-group">
-            <label>Nota mas aguda de la cancion</label>
-            <div class="note-selector">
-              <select id="rec-high-note" class="input-field" required>
-                <option value="">Nota</option>
-              </select>
-              <select id="rec-high-octave" class="input-field" required>
-                <option value="">Octava</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-              </select>
-            </div>
-          </div>
+          <button class="btn-icon" onclick="clearRecSelection()" title="Cambiar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
         </div>
-        <button type="submit" class="btn btn-primary btn-glow">
+        <div class="form-group">
+          <label>Tonalidad original <span class="optional">(mejora la precision)</span></label>
+          <select id="rec-key" class="input-field"></select>
+        </div>
+        <button class="btn btn-primary btn-glow" onclick="getRecommendation()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
           Obtener Recomendacion
         </button>
-      </form>
+      </div>
       <div id="recommendation-result" class="result-card" style="display:none">
-        <div class="result-header">
-          <h3>Recomendacion</h3>
-        </div>
+        <div class="result-header"><h3>Recomendacion</h3></div>
         <div id="result-content"></div>
       </div>
     </section>
 
-    <!-- Vocal Profile Section -->
+    <!-- Profile -->
     <section id="section-profile" class="section" style="display:none">
       <div class="section-header">
         <h2 class="section-title">Perfil Vocal</h2>
-        <p class="section-desc">Tu rango vocal estimado basado en tus canciones</p>
+        <p class="section-desc">Tu patron de transposicion basado en tus canciones</p>
       </div>
       <div id="profile-content">
         <div class="profile-card">
-          <div class="profile-visual">
-            <div id="profile-piano" class="piano-container"></div>
-          </div>
+          <h3>Resumen</h3>
           <div class="profile-stats">
             <div class="profile-stat">
-              <span class="profile-stat-label">Nota mas grave</span>
-              <span class="profile-stat-value" id="profile-low">--</span>
-            </div>
-            <div class="profile-stat">
-              <span class="profile-stat-label">Nota mas aguda</span>
-              <span class="profile-stat-value" id="profile-high">--</span>
-            </div>
-            <div class="profile-stat">
-              <span class="profile-stat-label">Rango total</span>
-              <span class="profile-stat-value" id="profile-range-semitones">--</span>
-            </div>
-            <div class="profile-stat">
-              <span class="profile-stat-label">Canciones analizadas</span>
+              <span class="profile-stat-label">Canciones</span>
               <span class="profile-stat-value" id="profile-song-count">0</span>
+            </div>
+            <div class="profile-stat">
+              <span class="profile-stat-label">Ajuste medio</span>
+              <span class="profile-stat-value" id="profile-avg-shift">--</span>
+            </div>
+            <div class="profile-stat">
+              <span class="profile-stat-label">Con tonalidad</span>
+              <span class="profile-stat-value" id="profile-with-keys">0</span>
             </div>
           </div>
         </div>
         <div class="profile-card">
-          <h3>Distribucion de tus canciones</h3>
-          <div id="songs-distribution" class="distribution-chart"></div>
+          <h3>Distribucion de ajustes</h3>
+          <div id="shift-distribution" class="distribution-chart"></div>
+        </div>
+        <div class="profile-card">
+          <h3>Tonalidades en las que cantas</h3>
+          <div id="key-distribution" class="distribution-chart"></div>
         </div>
       </div>
       <div id="profile-empty" class="empty-state" style="display:none">
@@ -329,35 +261,15 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Tonalidad original</label>
-            <select id="edit-key" class="input-field" required></select>
+            <label>Tonalidad</label>
+            <select id="edit-key" class="input-field"></select>
           </div>
           <div class="form-group">
             <label>Semitonos</label>
             <div class="semitone-control">
-              <button type="button" class="semitone-btn" onclick="adjustEditSemitone(-1)">-</button>
+              <button type="button" class="semitone-btn" onclick="adjustSemitone('edit-semitones', -1)">-</button>
               <input type="number" id="edit-semitones" class="input-field semitone-input" value="0" min="-12" max="12">
-              <button type="button" class="semitone-btn" onclick="adjustEditSemitone(1)">+</button>
-            </div>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Nota grave</label>
-            <div class="note-selector">
-              <select id="edit-low-note" class="input-field" required></select>
-              <select id="edit-low-octave" class="input-field" required>
-                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Nota aguda</label>
-            <div class="note-selector">
-              <select id="edit-high-note" class="input-field" required></select>
-              <select id="edit-high-octave" class="input-field" required>
-                <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
-              </select>
+              <button type="button" class="semitone-btn" onclick="adjustSemitone('edit-semitones', 1)">+</button>
             </div>
           </div>
         </div>
@@ -369,9 +281,7 @@
     </div>
   </div>
 
-  <!-- Toast -->
   <div id="toast" class="toast"></div>
-
   <script src="app.js"></script>
 </body>
 </html>
