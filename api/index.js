@@ -26,15 +26,21 @@ async function initDb() {
       artist TEXT NOT NULL,
       original_key TEXT DEFAULT '',
       semitone_shift INTEGER NOT NULL DEFAULT 0,
+      octave_down INTEGER NOT NULL DEFAULT 0,
       deezer_id INTEGER,
       album_cover TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+  try { await db.execute('ALTER TABLE songs ADD COLUMN octave_down INTEGER NOT NULL DEFAULT 0'); } catch {}
   dbReady = true;
 }
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+function effectiveShift(song) {
+  return song.semitone_shift + (song.octave_down ? -12 : 0);
+}
 
 const FLATS_TO_SHARPS = { 'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B' };
 
@@ -122,14 +128,15 @@ app.get('/api/songs', async (req, res) => {
 
 app.post('/api/songs', async (req, res) => {
   await initDb();
-  const { title, artist, original_key, semitone_shift, deezer_id, album_cover } = req.body;
+  const { title, artist, original_key, semitone_shift, octave_down, deezer_id, album_cover } = req.body;
   if (!title || !artist) {
     return res.status(400).json({ error: 'Title and artist are required' });
   }
   const shift = parseInt(semitone_shift) || 0;
+  const octDown = octave_down ? 1 : 0;
   const result = await db.execute({
-    sql: 'INSERT INTO songs (title, artist, original_key, semitone_shift, deezer_id, album_cover) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [title, artist, original_key || '', shift, deezer_id || null, album_cover || '']
+    sql: 'INSERT INTO songs (title, artist, original_key, semitone_shift, octave_down, deezer_id, album_cover) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    args: [title, artist, original_key || '', shift, octDown, deezer_id || null, album_cover || '']
   });
   const song = await db.execute({ sql: 'SELECT * FROM songs WHERE id = ?', args: [Number(result.lastInsertRowid)] });
   res.json(song.rows[0]);
@@ -143,15 +150,16 @@ app.delete('/api/songs/:id', async (req, res) => {
 
 app.put('/api/songs/:id', async (req, res) => {
   await initDb();
-  const { title, artist, original_key, semitone_shift } = req.body;
+  const { title, artist, original_key, semitone_shift, octave_down } = req.body;
   if (!title || !artist) {
     return res.status(400).json({ error: 'Title and artist are required' });
   }
   const shift = parseInt(semitone_shift) || 0;
+  const octDown = octave_down ? 1 : 0;
   const id = parseInt(req.params.id);
   await db.execute({
-    sql: 'UPDATE songs SET title=?, artist=?, original_key=?, semitone_shift=? WHERE id=?',
-    args: [title, artist, original_key || '', shift, id]
+    sql: 'UPDATE songs SET title=?, artist=?, original_key=?, semitone_shift=?, octave_down=? WHERE id=?',
+    args: [title, artist, original_key || '', shift, octDown, id]
   });
   const song = await db.execute({ sql: 'SELECT * FROM songs WHERE id = ?', args: [id] });
   res.json(song.rows[0]);
@@ -171,11 +179,11 @@ app.get('/api/vocal-profile', async (req, res) => {
   const songsWithKeys = songs.filter(s => s.original_key && keyToIndex(s.original_key) !== -1);
   const effectiveKeys = songsWithKeys.map(s => {
     const ki = keyToIndex(s.original_key);
-    return ((ki + s.semitone_shift) % 12 + 12) % 12;
+    return ((ki + effectiveShift(s)) % 12 + 12) % 12;
   });
 
-  const shifts = songs.map(s => s.semitone_shift);
-  const avgShift = shifts.reduce((a, b) => a + b, 0) / shifts.length;
+  const effShifts = songs.map(s => effectiveShift(s));
+  const avgShift = effShifts.reduce((a, b) => a + b, 0) / effShifts.length;
 
   const keyDistribution = {};
   effectiveKeys.forEach(k => {
@@ -189,7 +197,7 @@ app.get('/api/vocal-profile', async (req, res) => {
   });
 
   const shiftDistribution = {};
-  shifts.forEach(s => {
+  effShifts.forEach(s => {
     const label = s === 0 ? '0' : (s > 0 ? `+${s}` : `${s}`);
     shiftDistribution[label] = (shiftDistribution[label] || 0) + 1;
   });
@@ -218,8 +226,8 @@ app.post('/api/recommend', async (req, res) => {
     return res.json({ recommendation: null, message: 'Registra canciones primero para obtener recomendaciones' });
   }
 
-  const shifts = songs.map(s => s.semitone_shift);
-  const avgShift = Math.round(shifts.reduce((a, b) => a + b, 0) / shifts.length);
+  const effShifts = songs.map(s => effectiveShift(s));
+  const avgShift = Math.round(effShifts.reduce((a, b) => a + b, 0) / effShifts.length);
 
   if (!original_key || keyToIndex(original_key) === -1) {
     return res.json({
@@ -251,7 +259,7 @@ app.post('/api/recommend', async (req, res) => {
 
   const effectiveKeys = songsWithKeys.map(s => {
     const ki = keyToIndex(s.original_key);
-    return ((ki + s.semitone_shift) % 12 + 12) % 12;
+    return ((ki + effectiveShift(s)) % 12 + 12) % 12;
   });
 
   let bestShift = 0;

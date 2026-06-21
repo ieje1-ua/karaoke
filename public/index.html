@@ -150,9 +150,15 @@
             </div>
           </div>
         </div>
+        <label class="toggle-row" for="add-octave-down">
+          <span class="toggle-label">Canto en octava baja</span>
+          <span class="toggle-hint">Subo tonos pero canto una octava mas grave (ej: canciones de mujer)</span>
+          <input type="checkbox" id="add-octave-down" class="toggle-input">
+          <span class="toggle-switch"></span>
+        </label>
         <div class="form-info">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
-          <span>El ajuste es lo que pones en tu maquina de karaoke. Ej: si bajas 2 tonos, pon <b>-2</b>.</span>
+          <span>El ajuste es lo que pones en tu maquina de karaoke. Marca "octava baja" si subes tonos pero cantas la melodia una octava mas grave que la original.</span>
         </div>
         <button class="btn btn-primary btn-glow" onclick="addSong()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
@@ -273,6 +279,11 @@
             </div>
           </div>
         </div>
+        <label class="toggle-row" for="edit-octave-down">
+          <span class="toggle-label">Canto en octava baja</span>
+          <input type="checkbox" id="edit-octave-down" class="toggle-input">
+          <span class="toggle-switch"></span>
+        </label>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancelar</button>
           <button type="submit" class="btn btn-primary">Guardar</button>

@@ -196,6 +196,7 @@ function renderSongs() {
           <div class="song-meta">
             ${song.original_key ? `<span class="song-tag">Tono: ${esc(song.original_key)}</span>` : ''}
             <span class="song-tag">${shift} st</span>
+            ${song.octave_down ? '<span class="song-tag tag-octave">8va baja</span>' : ''}
           </div>
         </div>
         <div class="song-actions">
@@ -221,6 +222,7 @@ async function addSong() {
     artist,
     original_key: document.getElementById('add-key').value,
     semitone_shift: parseInt(document.getElementById('add-semitones').value) || 0,
+    octave_down: document.getElementById('add-octave-down').checked,
     deezer_id: document.getElementById('add-deezer-id').value || null,
     album_cover: document.getElementById('add-album-cover').value || ''
   };
@@ -236,6 +238,7 @@ async function addSong() {
     clearAddSelection();
     document.getElementById('add-key').value = '';
     document.getElementById('add-semitones').value = '0';
+    document.getElementById('add-octave-down').checked = false;
   } else {
     const data = await res.json();
     showToast(data.error || 'Error al registrar', 'error');
@@ -258,6 +261,7 @@ function editSong(id) {
   document.getElementById('edit-artist').value = song.artist;
   document.getElementById('edit-key').value = song.original_key || '';
   document.getElementById('edit-semitones').value = song.semitone_shift;
+  document.getElementById('edit-octave-down').checked = !!song.octave_down;
   document.getElementById('edit-modal').style.display = '';
 }
 
@@ -270,7 +274,8 @@ async function updateSong(e) {
     title: document.getElementById('edit-title').value,
     artist: document.getElementById('edit-artist').value,
     original_key: document.getElementById('edit-key').value,
-    semitone_shift: parseInt(document.getElementById('edit-semitones').value) || 0
+    semitone_shift: parseInt(document.getElementById('edit-semitones').value) || 0,
+    octave_down: document.getElementById('edit-octave-down').checked
   };
   const res = await fetch(`/api/songs/${id}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -373,7 +378,7 @@ async function refreshDashboard() {
             <span class="song-mini-title">${esc(s.title)}</span>
             <span class="song-mini-artist">${esc(s.artist)}</span>
           </div>
-          <span class="song-mini-shift">${shift} st</span>
+          <span class="song-mini-shift">${shift} st${s.octave_down ? ' ↓8va' : ''}</span>
         </div>`;
     }).join('');
   }
